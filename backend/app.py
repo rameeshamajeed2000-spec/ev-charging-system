@@ -12,8 +12,8 @@ def get_connection():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="",   # XAMPP default
-        database="ev_charging"
+        password="password",   # XAMPP default
+        database="ev_project"
     )
 
 # =========================
@@ -24,6 +24,49 @@ def home():
     return jsonify({
         "message": "EV Charging API Running with MySQL ⚡"
     })
+
+# =========================
+# USER REGISTER
+# =========================
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.get_json()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "INSERT INTO users (username, password) VALUES (%s, %s)",
+        (data["username"], data["password"])
+    )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "User registered successfully ✅"})
+
+# =========================
+# USER LOGIN
+# =========================
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json()
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT * FROM users WHERE username=%s AND password=%s",
+        (data["username"], data["password"])
+    )
+
+    user = cursor.fetchone()
+    conn.close()
+
+    if user:
+        return jsonify({"message": "Login successful ✅"})
+    else:
+        return jsonify({"message": "Invalid credentials ❌"})
 
 # =========================
 # GET ALL STATIONS
@@ -40,7 +83,7 @@ def get_stations():
     return jsonify(stations)
 
 # =========================
-# ADD STATION (optional future use)
+# ADD STATION
 # =========================
 @app.route("/api/stations", methods=["POST"])
 def add_station():
@@ -50,8 +93,13 @@ def add_station():
     cursor = conn.cursor()
 
     cursor.execute(
-        "INSERT INTO stations (name, location, status) VALUES (%s, %s, %s)",
-        (data["name"], data["location"], data["status"])
+        "INSERT INTO stations (name, location, total_slots, available_slots) VALUES (%s, %s, %s, %s)",
+        (
+            data["name"],
+            data["location"],
+            data["total_slots"],
+            data["available_slots"]
+        )
     )
 
     conn.commit()
@@ -69,6 +117,7 @@ def create_booking():
     conn = get_connection()
     cursor = conn.cursor()
 
+    # insert booking
     cursor.execute(
         "INSERT INTO bookings (station_id, user, message) VALUES (%s, %s, %s)",
         (
@@ -78,10 +127,16 @@ def create_booking():
         )
     )
 
+    # reduce available slots
+    cursor.execute(
+        "UPDATE stations SET available_slots = available_slots - 1 WHERE id = %s",
+        (data["station_id"],)
+    )
+
     conn.commit()
     conn.close()
 
-    return jsonify({"message": "Booking saved in database ⚡"})
+    return jsonify({"message": "Booking successful ⚡"})
 
 # =========================
 # GET ALL BOOKINGS
@@ -96,6 +151,20 @@ def get_bookings():
 
     conn.close()
     return jsonify(bookings)
+
+# =========================
+# DELETE BOOKING (NEW)
+# =========================
+@app.route("/api/bookings/<int:id>", methods=["DELETE"])
+def delete_booking(id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM bookings WHERE id=%s", (id,))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Booking deleted 🗑️"})
 
 # =========================
 # RUN SERVER
